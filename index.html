@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVA | Project E.D.I.T.H.</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&display=swap');
+        body { background: #050505; color: #00f2ff; font-family: 'Share Tech Mono', monospace; }
+        .nova-glow { text-shadow: 0 0 10px #00f2ff, 0 0 20px #00f2ff; }
+        .chat-container::-webkit-scrollbar { width: 4px; }
+        .chat-container::-webkit-scrollbar-thumb { background: #00f2ff; border-radius: 10px; }
+        .input-box { background: rgba(255, 255, 255, 0.05); border: 1px solid #00f2ff; backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <header class="p-6 border-b border-cyan-900 flex justify-between items-center">
+        <h1 class="text-2xl font-bold orbitron nova-glow tracking-widest">NOVA v1.0</h1>
+        <div class="flex items-center gap-2">
+            <span class="h-2 w-2 bg-green-500 rounded-full animate-pulse"></span>
+            <span class="text-xs text-cyan-500">SİSTEMLER AKTİF</span>
+        </div>
+    </header>
+
+    <main id="chat-window" class="flex-1 overflow-y-auto p-6 space-y-6 chat-container">
+        <div class="max-w-[80%] opacity-80">
+            <p class="text-xs text-cyan-600 uppercase mb-1">// NOVA CORE</p>
+            <p class="bg-cyan-950 p-4 rounded-tr-3xl rounded-bl-3xl border-l-2 border-cyan-400">
+                Sistemler yüklendi. Hafıza bankası hazır. Hoş geldin şef, seni dinliyorum...
+            </p>
+        </div>
+    </main>
+
+    <footer class="p-6">
+        <div class="relative max-w-4xl mx-auto">
+            <input type="text" id="userInput" 
+                   class="w-full input-box p-5 rounded-full text-white placeholder-cyan-800 outline-none pr-16" 
+                   placeholder="Komut girin veya bir şey sorun...">
+            <button onclick="handleSend()" 
+                    class="absolute right-3 top-3 bg-cyan-500 hover:bg-cyan-400 text-black p-2 rounded-full transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                </svg>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        let memory = JSON.parse(localStorage.getItem('nova_memory')) || [];
+
+        async function handleSend() {
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            appendMessage('SEN', message, 'user');
+            input.value = '';
+
+            memory.push({ role: "user", content: message });
+            if (memory.length > 20) memory.shift(); 
+
+            const typingId = appendMessage('NOVA', 'Düşünüyor...', 'ai', true);
+
+            try {
+                // Vercel'in kendi gizli API klasörüne istek atıyoruz
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: memory })
+                });
+                
+                const data = await response.json();
+                
+                if(data.error) {
+                    throw new Error(data.error.message);
+                }
+
+                const aiReply = data.choices[0].message.content;
+
+                removeTyping(typingId);
+                appendMessage('NOVA', aiReply, 'ai');
+                memory.push({ role: "assistant", content: aiReply });
+                localStorage.setItem('nova_memory', JSON.stringify(memory));
+
+            } catch (error) {
+                removeTyping(typingId);
+                appendMessage('SİSTEM HATA', 'Bağlantı kurulamadı şef. Vercel Ayarlarını ve API anahtarını kontrol et!', 'ai');
+            }
+        }
+
+        function appendMessage(sender, text, type, isTyping = false) {
+            const chatWindow = document.getElementById('chat-window');
+            const id = Date.now();
+            const align = type === 'user' ? 'ml-auto text-right' : 'mr-auto';
+            const color = type === 'user' ? 'bg-zinc-900 border-r-2 border-zinc-500' : 'bg-cyan-950 border-l-2 border-cyan-400';
+            const shape = type === 'user' ? 'rounded-tl-3xl rounded-br-3xl' : 'rounded-tr-3xl rounded-bl-3xl';
+
+            const html = `
+                <div id="${id}" class="max-w-[85%] ${align}">
+                    <p class="text-[10px] text-cyan-600 uppercase mb-1 tracking-widest">// ${sender}</p>
+                    <p class="${color} ${shape} p-4 text-sm leading-relaxed">${text}</p>
+                </div>
+            `;
+            chatWindow.innerHTML += html;
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            return id;
+        }
+
+        function removeTyping(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+    </script>
+</body>
+</html>
